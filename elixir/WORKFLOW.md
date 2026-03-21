@@ -212,7 +212,6 @@ Use this only when completion is blocked by missing required tools or missing au
     - You may make temporary local proof edits to validate assumptions (for example: tweak a local build input for `make`, or hardcode a UI account / response path) when this increases confidence.
     - Revert every temporary proof edit before commit/push.
     - Document these temporary proof steps and outcomes in the workpad `Validation`/`Notes` sections so reviewers can follow the evidence.
-    - If app-touching, run `launch-app` validation and capture/upload media via `github-pr-media` before handoff.
 6.  Re-check all acceptance criteria and close any gaps.
 7.  Before every `git push` attempt, run the required validation for your scope and confirm it passes; if it fails, address issues and rerun until green, then commit and push changes.
 8.  Attach PR URL to the issue (prefer attachment; use the workpad comment only if attachment is unavailable).
@@ -249,15 +248,46 @@ Use this only when completion is blocked by missing required tools or missing au
 
 ## Step 4: Rework handling
 
-1. Treat `Rework` as a full approach reset, not incremental patching.
-2. Re-read the full issue body and all human comments; explicitly identify what will be done differently this attempt.
-3. Close the existing PR tied to the issue.
-4. Remove the existing `## Codex Workpad` comment from the issue.
-5. Create a fresh branch from `origin/main`.
-6. Start over from the normal kickoff flow:
+When an issue moves to `Rework`, first determine the scope of required changes:
+
+### Minor feedback / incremental changes (typical case)
+
+For most code review feedback (addressing comments, small fixes, requested tweaks):
+
+1. **Keep the existing PR and branch open** - do not close them.
+2. Continue using the existing `## Codex Workpad` comment - do not remove it.
+3. Address each piece of feedback directly in the current branch:
+   - Make the requested code changes
+   - Respond to inline comments (resolve or reply with justification)
+   - Push new commits to the same branch
+4. Update the workpad with:
+   - List of feedback items addressed
+   - Any items pushed back with justification
+   - Validation steps re-run
+5. Re-run validation/tests to ensure changes are correct.
+6. Move the issue back to `Human Review` once all feedback is addressed.
+
+**Preserve review history**: Keeping the same PR preserves all discussion context, review threads, and decision history. Reviewers can see incremental changes rather than starting from scratch.
+
+### Major rework / complete reset (rare case)
+
+Only close the PR and start fresh when:
+- The entire approach is fundamentally flawed and needs redesign
+- The branch has become unrecoverable (severe merge conflicts, corrupted history)
+- The scope has changed so dramatically that the existing PR is irrelevant
+
+For major rework:
+
+1. Document in the workpad **why** a reset is necessary before closing anything.
+2. Close the existing PR tied to the issue.
+3. Remove the existing `## Codex Workpad` comment from the issue.
+4. Create a fresh branch from `origin/main`.
+5. Start over from the normal kickoff flow:
    - If current issue state is `Todo`, move it to `In Progress`; otherwise keep the current state.
    - Create a new bootstrap `## Codex Workpad` comment.
    - Build a fresh plan/checklist and execute end-to-end.
+
+**Default assumption**: Treat `Rework` as minor feedback unless there is clear evidence that the approach is fundamentally broken. Preserve PR history and discussion context as the default behavior.
 
 ## Completion bar before Human Review
 
@@ -267,13 +297,14 @@ Use this only when completion is blocked by missing required tools or missing au
 - PR feedback sweep is complete and no actionable comments remain.
 - PR checks are green, branch is pushed, and PR is linked on the issue.
 - Required PR metadata is present (`symphony` label).
-- If app-touching, runtime validation/media requirements from `App runtime validation (required)` are complete.
 
 ## Guardrails
 
 - If the branch PR is already closed/merged, do not reuse that branch or prior implementation state for continuation.
 - For closed/merged branch PRs, create a new branch from `origin/main` and restart from reproduction/planning as if starting fresh.
-- If issue state is `Backlog`, do not modify it; wait for human to move to `Todo`.
+- **Do not close an open PR for minor feedback or incremental changes** - address feedback in the same branch/PR to preserve review history and discussion context.
+- Only close a PR and start fresh for major rework (fundamentally flawed approach, unrecoverable branch, or completely changed scope).
+- If issue state is `Backlog`, do not modify it; wait for human to move it to `Todo`.
 - Do not edit the issue body/description for planning or progress tracking.
 - Use exactly one persistent workpad comment (`## Codex Workpad`) per issue.
 - If comment editing is unavailable in-session, use the update script. Only report blocked if both MCP editing and script-based editing are unavailable.
@@ -281,8 +312,8 @@ Use this only when completion is blocked by missing required tools or missing au
 - If out-of-scope improvements are found, create a separate Backlog issue rather
   than expanding current scope, and include a clear
   title/description/acceptance criteria, same-project assignment, a `related`
-  link to the current issue, and `blockedBy` when the follow-up depends on the
-  current issue.
+  link to the current issue, and `blockedBy` when the follow-up depends on
+  the current issue.
 - Do not move to `Human Review` unless the `Completion bar before Human Review` is satisfied.
 - In `Human Review`, do not make changes; wait and poll.
 - If state is terminal (`Done`), do nothing and shut down.
