@@ -43,6 +43,18 @@ defmodule SymphonyElixir.Linear.Client do
             }
           }
         }
+        children(first: $relationFirst) {
+          nodes {
+            id
+            identifier
+            state {
+              name
+            }
+          }
+        }
+        parent {
+          id
+        }
         createdAt
         updatedAt
       }
@@ -87,6 +99,18 @@ defmodule SymphonyElixir.Linear.Client do
               }
             }
           }
+        }
+        children(first: $relationFirst) {
+          nodes {
+            id
+            identifier
+            state {
+              name
+            }
+          }
+        }
+        parent {
+          id
         }
         createdAt
         updatedAt
@@ -458,8 +482,10 @@ defmodule SymphonyElixir.Linear.Client do
       branch_name: issue["branchName"],
       url: issue["url"],
       assignee_id: assignee_field(assignee, "id"),
+      parent_id: extract_parent_id(issue),
       blocked_by: extract_blockers(issue),
       labels: extract_labels(issue),
+      sub_issues: extract_sub_issues(issue),
       assigned_to_worker: assigned_to_worker?(assignee, assignee_filter),
       created_at: parse_datetime(issue["createdAt"]),
       updated_at: parse_datetime(issue["updatedAt"])
@@ -571,6 +597,28 @@ defmodule SymphonyElixir.Linear.Client do
   end
 
   defp extract_blockers(_), do: []
+
+  defp extract_sub_issues(%{"children" => %{"nodes" => sub_issues}})
+       when is_list(sub_issues) do
+    sub_issues
+    |> Enum.map(fn sub_issue ->
+      %{
+        id: sub_issue["id"],
+        identifier: sub_issue["identifier"],
+        state: get_in(sub_issue, ["state", "name"])
+      }
+    end)
+    |> Enum.reject(fn issue -> is_nil(issue.id) end)
+  end
+
+  defp extract_sub_issues(_), do: []
+
+  defp extract_parent_id(%{"parent" => %{"id" => parent_id}})
+       when is_binary(parent_id) do
+    parent_id
+  end
+
+  defp extract_parent_id(_), do: nil
 
   defp parse_datetime(nil), do: nil
 
