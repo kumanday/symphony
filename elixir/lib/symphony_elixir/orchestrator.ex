@@ -534,12 +534,18 @@ defmodule SymphonyElixir.Orchestrator do
   defp sort_issues_for_dispatch(issues) when is_list(issues) do
     Enum.sort_by(issues, fn
       %Issue{} = issue ->
-        {priority_rank(issue.priority), issue_created_at_sort_key(issue), issue.identifier || issue.id || ""}
+        {priority_rank(issue.priority), sub_issue_count(issue), issue_created_at_sort_key(issue), issue.identifier || issue.id || ""}
 
       _ ->
-        {priority_rank(nil), issue_created_at_sort_key(nil), ""}
+        {priority_rank(nil), 0, issue_created_at_sort_key(nil), ""}
     end)
   end
+
+  defp sub_issue_count(%Issue{sub_issues: sub_issues}) when is_list(sub_issues) do
+    length(sub_issues)
+  end
+
+  defp sub_issue_count(_issue), do: 0
 
   defp priority_rank(priority) when is_integer(priority) and priority in 1..4, do: priority
   defp priority_rank(_priority), do: 5
@@ -559,6 +565,7 @@ defmodule SymphonyElixir.Orchestrator do
        ) do
     candidate_issue?(issue, active_states, terminal_states) and
       !todo_issue_blocked_by_non_terminal?(issue, terminal_states) and
+      !parent_issue_blocked_by_incomplete_children?(issue, terminal_states) and
       !MapSet.member?(claimed, issue.id) and
       !Map.has_key?(running, issue.id) and
       available_slots(state) > 0 and
@@ -628,6 +635,22 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   defp todo_issue_blocked_by_non_terminal?(_issue, _terminal_states), do: false
+
+  defp parent_issue_blocked_by_incomplete_children?(
+         %Issue{sub_issues: sub_issues},
+         terminal_states
+       )
+       when is_list(sub_issues) do
+    Enum.any?(sub_issues, fn
+      %{state: sub_issue_state} when is_binary(sub_issue_state) ->
+        !terminal_issue_state?(sub_issue_state, terminal_states)
+
+      _ ->
+        true
+    end)
+  end
+
+  defp parent_issue_blocked_by_incomplete_children?(_issue, _terminal_states), do: false
 
   defp terminal_issue_state?(state_name, terminal_states) when is_binary(state_name) do
     MapSet.member?(terminal_states, normalize_issue_state(state_name))
@@ -1305,7 +1328,8 @@ defmodule SymphonyElixir.Orchestrator do
 
   defp retry_candidate_issue?(%Issue{} = issue, terminal_states) do
     candidate_issue?(issue, active_state_set(), terminal_states) and
-      !todo_issue_blocked_by_non_terminal?(issue, terminal_states)
+      !todo_issue_blocked_by_non_terminal?(issue, terminal_states) and
+      !parent_issue_blocked_by_incomplete_children?(issue, terminal_states)
   end
 
   defp dispatch_slots_available?(%Issue{} = issue, %State{} = state) do
