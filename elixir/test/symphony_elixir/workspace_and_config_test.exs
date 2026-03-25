@@ -85,7 +85,10 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
       assert File.read!(Path.join(second_workspace, "README.md")) == "changed\n"
       assert File.read!(Path.join(second_workspace, "local-progress.txt")) == "in progress\n"
       assert File.read!(Path.join([second_workspace, "deps", "cache.txt"])) == "cached deps\n"
-      assert File.read!(Path.join([second_workspace, "_build", "artifact.txt"])) == "compiled artifact\n"
+
+      assert File.read!(Path.join([second_workspace, "_build", "artifact.txt"])) ==
+               "compiled artifact\n"
+
       assert File.read!(Path.join([second_workspace, "tmp", "scratch.txt"])) == "remove me\n"
     after
       File.rm_rf(workspace_root)
@@ -134,7 +137,9 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
       write_workflow_file!(Workflow.workflow_file_path(), workspace_root: workspace_root)
 
       assert {:ok, canonical_outside_root} = SymphonyElixir.PathSafety.canonicalize(outside_root)
-      assert {:ok, canonical_workspace_root} = SymphonyElixir.PathSafety.canonicalize(workspace_root)
+
+      assert {:ok, canonical_workspace_root} =
+               SymphonyElixir.PathSafety.canonicalize(workspace_root)
 
       assert {:error, {:workspace_outside_root, ^canonical_outside_root, ^canonical_workspace_root}} =
                Workspace.create_for_issue("MT-SYM")
@@ -262,7 +267,9 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
 
     try do
       target_workspace = Path.join(workspace_root, "S_1")
-      untouched_workspace = Path.join(workspace_root, "OTHER-#{System.unique_integer([:positive])}")
+
+      untouched_workspace =
+        Path.join(workspace_root, "OTHER-#{System.unique_integer([:positive])}")
 
       File.mkdir_p!(target_workspace)
       File.mkdir_p!(untouched_workspace)
@@ -424,6 +431,7 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
     assert Enum.map(issues, & &1.id) == issue_ids
 
     assert_receive {:fetch_issue_states_page, query, %{ids: ^first_batch_ids, first: 50, relationFirst: 50}}
+
     assert query =~ "SymphonyLinearIssuesById"
 
     assert_receive {:fetch_issue_states_page, ^query, %{ids: ^second_batch_ids, first: 5, relationFirst: 50}}
@@ -581,7 +589,74 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
              Orchestrator.revalidate_issue_for_dispatch_for_test(stale_issue, fetcher)
 
     assert skipped_issue.identifier == "MT-1005"
-    assert skipped_issue.blocked_by == [%{id: "blocker-3", identifier: "MT-1006", state: "In Progress"}]
+
+    assert skipped_issue.blocked_by == [
+             %{id: "blocker-3", identifier: "MT-1006", state: "In Progress"}
+           ]
+  end
+
+  test "reconcile_claimed_set releases stale claims for issues no longer in active tracker" do
+    stale_issue_id = "stale-claim-1"
+    visible_issue_id = "visible-claim-1"
+    running_issue_id = "running-claim-1"
+
+    state = %Orchestrator.State{
+      max_concurrent_agents: 3,
+      running: %{
+        running_issue_id => %{
+          pid: self(),
+          ref: make_ref(),
+          identifier: "MT-RUNNING",
+          issue: %Issue{id: running_issue_id, identifier: "MT-RUNNING", state: "In Progress"},
+          started_at: DateTime.utc_now()
+        }
+      },
+      claimed: MapSet.new([stale_issue_id, visible_issue_id, running_issue_id]),
+      codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
+      retry_attempts: %{}
+    }
+
+    visible_issues = [
+      %Issue{id: visible_issue_id, identifier: "MT-VISIBLE", state: "Todo"},
+      %Issue{id: "new-issue-1", identifier: "MT-NEW", state: "Todo"}
+    ]
+
+    updated_state = Orchestrator.reconcile_claimed_set_for_test(state, visible_issues)
+
+    refute MapSet.member?(updated_state.claimed, stale_issue_id),
+           "Stale claim should be released"
+
+    assert MapSet.member?(updated_state.claimed, visible_issue_id),
+           "Visible issue claim should be preserved"
+
+    assert MapSet.member?(updated_state.claimed, running_issue_id),
+           "Running issue claim should be preserved"
+
+    assert MapSet.size(updated_state.claimed) == 2
+  end
+
+  test "reconcile_claimed_set preserves all claims when all issues are visible" do
+    issue_id_1 = "claim-all-1"
+    issue_id_2 = "claim-all-2"
+
+    state = %Orchestrator.State{
+      max_concurrent_agents: 3,
+      running: %{},
+      claimed: MapSet.new([issue_id_1, issue_id_2]),
+      codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
+      retry_attempts: %{}
+    }
+
+    visible_issues = [
+      %Issue{id: issue_id_1, identifier: "MT-ALL-1", state: "Todo"},
+      %Issue{id: issue_id_2, identifier: "MT-ALL-2", state: "In Progress"}
+    ]
+
+    updated_state = Orchestrator.reconcile_claimed_set_for_test(state, visible_issues)
+
+    assert MapSet.member?(updated_state.claimed, issue_id_1)
+    assert MapSet.member?(updated_state.claimed, issue_id_2)
+    assert MapSet.size(updated_state.claimed) == 2
   end
 
   test "workspace remove returns error information for missing directory" do
@@ -772,7 +847,10 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
     assert config.codex.read_timeout_ms == 5_000
     assert config.codex.stall_timeout_ms == 300_000
 
-    write_workflow_file!(Workflow.workflow_file_path(), codex_command: "codex app-server --model gpt-5.3-codex")
+    write_workflow_file!(Workflow.workflow_file_path(),
+      codex_command: "codex app-server --model gpt-5.3-codex"
+    )
+
     assert Config.settings!().codex.command == "codex app-server --model gpt-5.3-codex"
 
     explicit_root =
@@ -1201,7 +1279,10 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
 
       read_only_settings = %{
         settings
-        | codex: %{settings.codex | turn_sandbox_policy: %{"type" => "readOnly", "networkAccess" => true}}
+        | codex: %{
+            settings.codex
+            | turn_sandbox_policy: %{"type" => "readOnly", "networkAccess" => true}
+          }
       }
 
       assert {:ok, %{"type" => "readOnly", "networkAccess" => true}} =
@@ -1209,7 +1290,10 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
 
       future_settings = %{
         settings
-        | codex: %{settings.codex | turn_sandbox_policy: %{"type" => "futureSandbox", "nested" => %{"flag" => true}}}
+        | codex: %{
+            settings.codex
+            | turn_sandbox_policy: %{"type" => "futureSandbox", "nested" => %{"flag" => true}}
+          }
       }
 
       assert {:ok, %{"type" => "futureSandbox", "nested" => %{"flag" => true}}} =
